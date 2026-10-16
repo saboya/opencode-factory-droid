@@ -15,7 +15,7 @@
     "gen-models": "node scripts/gen-models.mjs"
   },
   "dependencies": {
-    "@opencode/plugin": "^0.0.0-beta-19507"
+    "@opencode/plugin": "0.0.0-beta-19507"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

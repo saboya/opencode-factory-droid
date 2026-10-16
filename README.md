@@ -31,12 +31,15 @@ This plugin currently targets the **OpenCode V2 beta catalog API**:
 | Component | Verified version |
 | --- | --- |
 | OpenCode CLI (`opencode2`) | `0.0.0-beta-19242` |
-| `@opencode/plugin` | `0.0.0-beta-19507` |
+| `@opencode/plugin` | `0.0.0-beta-19507` (exact dependency pin) |
 | Factory client header version | `0.243.0` |
 
 It uses `ctx.catalog` and `aisdk:` provider packages. The newer V2 plugin API
 documented with `ctx.provider` / `ctx.model` is different; compatibility with that
 API has not been verified.
+
+Keep the plugin SDK dependency pinned exactly: a caret range on this prerelease
+also matches `0.0.0-reserved`, a placeholder package with no runtime entry point.
 
 For development scripts, use **Node.js 22.18+** (native TypeScript support) and npm.
 You also need a Factory API key with access to the models you want to use.
@@ -48,7 +51,7 @@ You also need a Factory API key with access to the models you want to use.
 Clone this repository, then install the locked dependencies:
 
 ```sh
-git clone <repository-url> opencode-factory-plugin
+git clone https://github.com/saboya/opencode-factory-droid.git opencode-factory-plugin
 cd opencode-factory-plugin
 npm ci
 ```
