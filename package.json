@@ -1,0 +1,24 @@
+{
+  "name": "opencode-factory-plugin",
+  "version": "0.1.0",
+  "description": "OpenCode V2 plugin exposing Factory (Droid) subscription models as providers",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "probe": "node scripts/probe.ts",
+    "gen-models": "node scripts/gen-models.mjs"
+  },
+  "dependencies": {
+    "@opencode/plugin": "^0.0.0-beta-19507"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0"
+  }
+}
