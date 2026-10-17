@@ -49,9 +49,8 @@ export interface RouteSpec {
   /** Display name in OpenCode. */
   name: string;
   /**
-   * AI-SDK package the beta CLI resolves into a LanguageModel. The beta
-   * lineage (`0.0.0-beta-*`) only understands `aisdk:`-prefixed packages;
-   * native `@opencode/ai/providers/*` values fail schema validation.
+   * AI-SDK package OpenCode resolves into a LanguageModel. Keep the verified
+   * `aisdk:` transports so the Factory wire behavior remains unchanged.
    */
   package: string;
   /** Path appended to the base URL; the package appends the verb. */

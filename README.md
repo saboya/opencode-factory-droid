@@ -28,20 +28,16 @@ organization's policy; regional backend availability can further restrict access
 
 ## Compatibility
 
-This plugin currently targets the **OpenCode V2 beta catalog API**:
+This plugin targets **OpenCode V2**:
 
 | Component | Verified version |
 | --- | --- |
-| OpenCode CLI (`opencode2`) | `0.0.0-beta-19242` |
-| `@opencode/plugin` | `0.0.0-beta-19507` (exact dependency pin) |
+| OpenCode CLI (`opencode`) | `2.0.32` |
+| `@opencode/plugin` | `2.0.32` (exact dependency pin) |
 | Factory client header version | `0.243.0` |
 
-It uses `ctx.catalog` and `aisdk:` provider packages. The newer V2 plugin API
-documented with `ctx.provider` / `ctx.model` is different; compatibility with that
-API has not been verified.
-
-Keep the plugin SDK dependency pinned exactly: a caret range on this prerelease
-also matches `0.0.0-reserved`, a placeholder package with no runtime entry point.
+Provider and model registration uses `ctx.provider.transform` with `aisdk:`
+provider packages. The older beta `ctx.catalog` API is no longer used.
 
 For development scripts, use **Node.js 22.18+** (native TypeScript support) and npm.
 You also need a Factory API key with access to the models you want to use.
@@ -72,28 +68,29 @@ It reads the environment directly; it does not load `.env` files or perform OAut
 
 ### 3. Load the plugin
 
-**In this checkout:** the included `.opencode/plugins/factory.ts` loader imports
-`src/index.ts` automatically. Start OpenCode from the checkout directory.
-
-**In another project:** create `.opencode/plugins/factory.ts` in that project with
+Create `.opencode/plugins/factory.ts` in your project with
 the following content, replacing the path with the absolute path to your clone:
 
 ```ts
 export { default } from "/absolute/path/to/opencode-factory-plugin/src/index.ts";
 ```
 
-The loader shim is the verified loading method for the beta CLI above. Restart
+The loader shim is verified with the CLI above. Restart
 OpenCode and its background service after installing or updating the plugin so it
 loads the current code and environment.
+
+If the plugin is loaded from Git, OpenCode runs a cached checkout rather than
+this working copy. Push the changes and refresh the cached plugin, or point the
+configuration at the local checkout to pick up local edits.
 
 ### 4. Pick a model
 
 Use `/models` in OpenCode, or run a standalone smoke check:
 
 ```sh
-opencode2 run --standalone -m factory/claude-haiku-5-5 "say pong"
-opencode2 run --standalone -m factory-o/glm-5.3-flash "say pong"
-opencode2 run --standalone -m factory-gpt/gpt-6-luna "say pong"
+opencode run --standalone -m factory/claude-haiku-5-5 "say pong"
+opencode run --standalone -m factory-o/glm-5.3-flash "say pong"
+opencode run --standalone -m factory-gpt/gpt-6-luna "say pong"
 ```
 
 These examples require the corresponding models to be allowed for your account.
@@ -152,8 +149,15 @@ estimates. Model IDs used in configuration and commands stay the same
 ```sh
 npm run typecheck
 npm test
+npm run test:opencode
 npm run gen-models
 ```
+
+`test:opencode` uses the installed `opencode` binary (override with `OPENCODE_BIN`)
+in an isolated standalone project. It verifies a Chat Completions request against
+a loopback fixture, including policy loading, Factory headers, and Droid identity.
+It uses fake credentials and no subscription quota. Unit tests cover all three
+provider registrations, policy filtering, repeatable transforms, and cleanup.
 
 `gen-models` fetches models.dev and regenerates the committed
 `src/models.gen.ts` cost and limit tables. To use a downloaded dataset:

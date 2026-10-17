@@ -102,29 +102,14 @@ export default Plugin.define({
       }),
     ]);
 
-    // Register the three Factory routes as providers. `CatalogEditor.update`
-    // upserts, so re-running setup refreshes names, packages, headers and the
-    // model list in place; policy-excluded models are removed so a re-run after a
-    // policy change also drops them.
+    // Publish each route's complete source inventory through the V2 provider
+    // API. Rebuilds replay this transform, so excluded models never enter it.
     registrations.push(
-      await ctx.catalog.transform((editor) => {
+      await ctx.provider.transform((editor) => {
         for (const route of ROUTES) {
           const models = route.models.filter((m) => modelAllowed(policy, m.id));
           if (models.length > 0) {
-            const provider = toProvider({ ...route, models }, base, key, multipliers);
-            editor.provider.update(route.providerID, (p) => {
-              Object.assign(p, provider.info);
-            });
-            for (const model of provider.models) {
-              editor.model.update(route.providerID, model.modelID, (m) => {
-                Object.assign(m, model);
-              });
-            }
-          }
-          for (const m of route.models) {
-            if (!modelAllowed(policy, m.id)) {
-              editor.model.remove(route.providerID, Model.ID.make(m.modelID ?? m.id));
-            }
+            editor.add(toProvider({ ...route, models }, base, key, multipliers));
           }
         }
       }),

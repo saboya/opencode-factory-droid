@@ -11,15 +11,17 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.ts",
+    "test": "tsx --test test/*.test.ts",
+    "test:opencode": "tsx scripts/smoke-opencode.ts",
     "probe": "node scripts/probe.ts",
     "gen-models": "node scripts/gen-models.mjs"
   },
   "dependencies": {
-    "@opencode/plugin": "0.0.0-beta-19507"
+    "@opencode/plugin": "2.0.32"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.0"
   }
 }
