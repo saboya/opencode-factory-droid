@@ -60,7 +60,16 @@ function toProvider(route: RouteSpec, base: string, key: string, multipliers: Mu
       name: route.name,
       activation: "enabled" as const,
       package: route.package,
-      settings: { baseURL: `${base}${route.basePath}`, apiKey: key },
+      settings: {
+        baseURL: `${base}${route.basePath}`,
+        apiKey: key,
+        // Factory's OpenAI backend can use Zero Data Retention. Never rely on
+        // stored item IDs; request encrypted reasoning for full-history replay.
+        ...(route.providerID === "factory-gpt" ? {
+          store: false,
+          include: ["reasoning.encrypted_content"],
+        } : {}),
+      },
       headers: {
         authorization: `Bearer ${key}`,
         "user-agent": `factory-cli/${CLIENT_VERSION}`,

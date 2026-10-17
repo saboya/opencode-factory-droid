@@ -108,6 +108,17 @@ export async function registerFactoryHooks(
       const registration = await ctx.session.hook(
         kind,
         (session) => {
+          // Set the semantic option before SDK prompt conversion. Merely
+          // rewriting `store` on the HTTP body is too late: the SDK will have
+          // already replaced reasoning/text with server-side item_reference's.
+          if (providerID === "factory-gpt") {
+            session.options.store = false;
+            const include = session.options.include;
+            session.options.include = [...new Set([
+              ...(Array.isArray(include) ? include : []),
+              "reasoning.encrypted_content",
+            ])];
+          }
           const first = session.system[0];
           if (first && typeof first.text === "string" && first.text.startsWith(DROID_IDENTITY)) {
             return;

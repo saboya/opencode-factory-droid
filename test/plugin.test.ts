@@ -65,6 +65,9 @@ for (const restricted of [false, true]) {
       assert.equal(source.info.activation, "enabled");
       assert.deepEqual(source.info.settings, {
         baseURL: `http://fixture.invalid${route.basePath}`, apiKey: "fixture-key",
+        ...(route.providerID === "factory-gpt" ? {
+          store: false, include: ["reasoning.encrypted_content"],
+        } : {}),
       });
       assert.equal(source.info.headers?.["x-client-version"], CLIENT_VERSION);
       const expected = route.models.filter((m) => m.id !== blocked && (!restricted || m.id === allowed));

@@ -131,6 +131,14 @@ estimates. Model IDs used in configuration and commands stay the same
 
 ## Metadata and limitations
 
+### GPT reasoning and Zero Data Retention
+
+Factory GPT requests explicitly use `store: false` and include
+`reasoning.encrypted_content`. Follow-up steps replay encrypted reasoning and
+tool calls in full instead of referencing server-stored items, which are not
+available on Zero Data Retention backends. This applies to all `factory-gpt`
+models and main/auxiliary requests, without changing the other providers.
+
 ### Session titles
 
 The plugin defaults the hidden `title` agent to a free model from OpenCode's own
@@ -166,8 +174,9 @@ npm run gen-models
 ```
 
 `test:opencode` uses the installed `opencode` binary (override with `OPENCODE_BIN`)
-in an isolated standalone project. It verifies a Chat Completions request against
-a loopback fixture, including policy loading, Factory headers, and Droid identity.
+in an isolated standalone project. It verifies Chat Completions and a Responses
+reasoning/tool-result round trip against a loopback fixture, including stateless
+replay, policy loading, Factory headers, and Droid identity.
 It uses fake credentials and no subscription quota. Unit tests cover all three
 provider registrations, policy filtering, repeatable transforms, and cleanup.
 
