@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
     "probe": "node scripts/probe.ts",
     "gen-models": "node scripts/gen-models.mjs"
   },

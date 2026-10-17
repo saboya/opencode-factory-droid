@@ -14,6 +14,8 @@ Factory API key for authentication.
   cache for transient failures.
 - Generated upstream cost and context/output-limit metadata from
   [models.dev](https://models.dev).
+- Factory credit multipliers in the model picker, such as **Claude Opus 5.5
+  (1.6×)** and **GPT-6.1 Sol (0.8×)**.
 
 | Provider | Protocol | Model families |
 | --- | --- | --- |
@@ -109,6 +111,27 @@ when the organization uses an allowlist, only listed models are registered. If t
 fetch fails, the plugin uses its cached policy. Without a cache, it registers the
 full catalog. Restart the service to pick up policy changes.
 
+## Factory multipliers in the model picker
+
+Model display names include Factory's usage multiplier, for example:
+
+```text
+Claude Opus 5.5 (1.6×)
+GPT-6.1 Sol (0.8×)
+GLM-5.3-Flash (0.06×)
+```
+
+At startup, the plugin fetches the multipliers from Factory's
+[published model catalog](https://docs.factory.com/models). If that fetch fails,
+it uses a last-known cache and a bundled snapshot verified against Droid's SDK.
+Known promotional rates switch back to their regular rates at expiry, including
+when using cached data. Models without a known multiplier keep their original name.
+Restart the service to refresh the values.
+
+These are **Factory credit multipliers**, separate from OpenCode's USD cost
+estimates. Model IDs used in configuration and commands stay the same
+(`factory/claude-opus-5-5`, etc.). Droid is not required to fetch the multipliers.
+
 ## Metadata and limitations
 
 - **Cost estimates:** prices are upstream vendor list prices, not Factory charges
@@ -128,6 +151,7 @@ full catalog. Restart the service to pick up policy changes.
 
 ```sh
 npm run typecheck
+npm test
 npm run gen-models
 ```
 

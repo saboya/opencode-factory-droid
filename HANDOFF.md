@@ -1,6 +1,6 @@
 # opencode-factory — Handoff
 
-_Last updated: 2026-10-16 (post-M1). Written for an agent picking this up cold._
+_Last updated: 2026-10-17 (model multiplier display). Written for an agent picking this up cold._
 
 > **Companion docs** — `docs/factory-droid-behavior.md` (all verified Factory wire
 > behavior, consolidated) and `docs/reverse-engineering-playbook.md` (generic
@@ -135,7 +135,8 @@ From `@opencode/plugin@beta-19507` type files + empirical probing:
 Repo: `/Users/saboya/projects/saboya/opencode-droid`
 
 - `package.json` — name `opencode-factory-plugin`; `exports: {".": "./src/index.ts"}`;
-  dep `"@opencode/plugin": "^0.0.0-beta-19507"`; scripts: `typecheck`, `probe`, `gen-models`.
+  dep `"@opencode/plugin": "0.0.0-beta-19507"` (exact pin; caret resolves to the reserved
+  placeholder); scripts: `typecheck`, `test`, `probe`, `gen-models`.
 - `opencode.jsonc` — `{ "$schema", "plugins": ["file:///…/opencode-droid"] }` (inert; the
   `.opencode/plugins/factory.ts` shim is what loads — harmless, kept).
 - `src/catalog.ts` — pure data (no `@opencode/plugin` import; loadable by `node scripts/probe.ts`).
@@ -157,6 +158,13 @@ Repo: `/Users/saboya/projects/saboya/opencode-droid`
   from upstream vendor windows). Do not edit by hand; regenerate:
   `node scripts/gen-models.mjs [models.dev api.json]`. Caveats + provenance in the file
   header and docs/factory-droid-behavior.md §11 ("Cost & limit metadata").
+- `src/multipliers.ts` — Factory usage multipliers in `Model.Info.name` (e.g. `Claude
+  Opus 5.5 (1.6×)`). Fetches Factory's public Markdown catalog at setup, in parallel
+  with policy loading; cache (`factory/model-multipliers`) + SDK-verified snapshot
+  fallback. Promotion expiry handled even offline. Unknown rates omitted. No Droid
+  executable/runtime dependency; USD cost data and wire IDs are separate.
+- `test/multipliers.test.ts` — catalog parsing, cache/fallback, invalid data,
+  changed rates, and promotion-expiry checks (`npm test`).
 - `src/policy.ts` — org model policy: `loadModelPolicy()` fetches
   `GET https://app.factory.ai/api/organization/managed-settings`, parses
   `settings.modelPolicy` (`allowAllFactoryModels`, `allowedModelIds`, `blockedModelIds`),

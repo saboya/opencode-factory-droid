@@ -1,6 +1,7 @@
 import { Model, Plugin, Provider } from "@opencode/plugin";
 import { CLIENT_VERSION, ROUTES, providerFor, type FactoryModel, type RouteSpec } from "./catalog";
 import { COSTS, LIMITS } from "./models.gen";
+import { loadMultipliers, multiplierName, MULTIPLIER_CACHE_KEY, type MultiplierTable } from "./multipliers";
 import {
   loadModelPolicy,
   modelAllowed,
@@ -31,13 +32,13 @@ function baseURL(): string {
   return DEFAULT_BASE;
 }
 
-function toModel(providerID: Provider.ID, m: FactoryModel): Model.Info {
+function toModel(providerID: Provider.ID, m: FactoryModel, multipliers: MultiplierTable): Model.Info {
   const cost = COSTS[m.id];
   const limit = m.limit ?? LIMITS[m.id];
   return {
     ...Model.Info.default(providerID, Model.ID.make(m.id)),
     modelID: Model.ID.make(m.modelID ?? m.id),
-    name: m.name,
+    name: multiplierName(m.name, m.modelID ?? m.id, multipliers),
     family: m.family as Model.Family,
     headers: { "x-api-provider": providerFor(m) },
     ...(m.status ? { status: m.status } : {}),
@@ -50,7 +51,7 @@ function toModel(providerID: Provider.ID, m: FactoryModel): Model.Info {
   };
 }
 
-function toProvider(route: RouteSpec, base: string, key: string) {
+function toProvider(route: RouteSpec, base: string, key: string, multipliers: MultiplierTable) {
   const providerID = Provider.ID.make(route.providerID);
   return {
     info: {
@@ -66,7 +67,7 @@ function toProvider(route: RouteSpec, base: string, key: string) {
         "x-client-version": CLIENT_VERSION,
       },
     },
-    models: route.models.map((m) => toModel(providerID, m)),
+    models: route.models.map((m) => toModel(providerID, m, multipliers)),
   };
 }
 
@@ -89,7 +90,17 @@ export default Plugin.define({
         await ctx.storage.set(POLICY_CACHE_KEY, value as unknown as Parameters<typeof ctx.storage.set>[1]);
       },
     };
-    const policy = await loadModelPolicy({ key, store });
+    const [policy, multipliers] = await Promise.all([
+      loadModelPolicy({ key, store }),
+      loadMultipliers({
+        store: {
+          read: () => ctx.storage.get(MULTIPLIER_CACHE_KEY),
+          write: (value) => ctx.storage.set(
+            MULTIPLIER_CACHE_KEY, value as unknown as Parameters<typeof ctx.storage.set>[1],
+          ),
+        },
+      }),
+    ]);
 
     // Register the three Factory routes as providers. `CatalogEditor.update`
     // upserts, so re-running setup refreshes names, packages, headers and the
@@ -100,7 +111,7 @@ export default Plugin.define({
         for (const route of ROUTES) {
           const models = route.models.filter((m) => modelAllowed(policy, m.id));
           if (models.length > 0) {
-            const provider = toProvider({ ...route, models }, base, key);
+            const provider = toProvider({ ...route, models }, base, key, multipliers);
             editor.provider.update(route.providerID, (p) => {
               Object.assign(p, provider.info);
             });

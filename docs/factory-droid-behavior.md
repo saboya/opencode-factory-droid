@@ -273,6 +273,34 @@ Caveats:
 **Cheap-probe etiquette:** all probing should use `max_tokens`/`max_output_tokens` ≤ 32
 and the `PROBE_CHEAP` models to minimize subscription-quota burn.
 
+### Factory credit multipliers
+
+Verified 2026-10-17: Droid SDK `listModels({includeDisabled:true})` invokes the
+client's `droid.list_models` RPC and returns numeric `tokenMultiplier` plus optional
+`promoLabel` fields. Opus 5.5 returns `1.6`, GPT-6.1 Sol `0.8`, and GPT-5.6 Sol
+`1.6` with `promoLabel:"20% off"`. The REST `feature-flags`, `managed-settings`,
+and `billing/limits` responses tested did not contain the multiplier table.
+
+The public web client's registry holds base rates and promotion windows. Its
+display multiplier is `base × (1 − active discount)`, rounded to four decimal
+places. Its fallback credit estimator weights uncached input at 1, cache writes
+at 1.25 (short TTL) or 2 (one hour), cache reads at a per-model rate (default 0.1),
+and output at a per-model/provider rate, then multiplies by the effective model
+multiplier and rounds up. Opus 5.5 and GPT-6.1 Sol both use output weight 5 and
+cache-read weight 0.05. A reported positive `factoryCredits` value takes precedence
+over that client-side estimate. The displayed multiplier alone does not establish
+a USD charge.
+
+The plugin shows this as `Model.Info.name`, e.g. `Claude Opus 5.5 (1.6×)`;
+the beta schema has no model description or multiplier field. `src/multipliers.ts`
+loads `https://docs.factory.com/models.md` at setup in parallel with policy loading,
+parses the model-ID/multiplier columns and promotion end-date notes, and caches
+under `factory/model-multipliers`. Failure falls back to cached values and then a
+snapshot checked against the SDK/client registry. Known promotion cutoffs continue
+to apply offline. This avoids spawning Droid during plugin startup. Unknown rates
+are omitted, not guessed (e.g. the old `kimi-k2.7-code` entry). Wire/configuration
+model IDs and USD `cost[]` metadata are unaffected.
+
 ## 12. Reproduction commands
 
 ```sh
