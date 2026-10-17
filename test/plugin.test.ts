@@ -38,13 +38,14 @@ for (const restricted of [false, true]) {
     const registration = () => ({ dispose: async () => { disposed++; } });
     // Deliberately no ctx.catalog: setup must work with the current SDK API.
     const ctx = {
+      model: { list: async () => ({ data: [] }) },
       storage: { get: async () => undefined, set: async () => {} },
       provider: { transform: async (callback: typeof transform) => {
         transform = callback;
         return registration();
       } },
       session: { hook: async (kind: string, _callback: unknown, scope: { providerID: string }) => {
-        hooks.push({ kind, providerID: scope.providerID });
+        hooks.push({ kind, providerID: scope?.providerID });
         return registration();
       } },
     } as unknown as Context;
@@ -75,10 +76,10 @@ for (const restricted of [false, true]) {
         assert.ok(model.name.startsWith(spec.name));
       }
     }
-    assert.equal(hooks.length, 18);
-    assert.deepEqual([...new Set(hooks.map((h) => h.providerID))], ROUTES.map((r) => r.providerID));
+    assert.equal(hooks.length, 19);
+    assert.deepEqual([...new Set(hooks.filter((h) => h.providerID).map((h) => h.providerID))], ROUTES.map((r) => r.providerID));
     assert.equal(typeof cleanup, "function");
     if (typeof cleanup === "function") await cleanup();
-    assert.equal(disposed, 19);
+    assert.equal(disposed, 20);
   });
 }

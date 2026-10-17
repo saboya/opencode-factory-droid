@@ -9,6 +9,8 @@ import { CLIENT_VERSION, DROID_IDENTITY } from "../src/catalog.ts";
 
 const failures: unknown[] = [];
 let calls = 0;
+const requestedModels = new Set<string>();
+let titles = 0;
 const server = createServer(async (request, response) => {
   try {
     if (request.url === "/api/organization/managed-settings") {
@@ -18,15 +20,30 @@ const server = createServer(async (request, response) => {
       } } }));
       return;
     }
+    if (request.url === "/free/v1/chat/completions") {
+      let raw = "";
+      for await (const chunk of request) raw += chunk;
+      assert.equal(JSON.parse(raw).model, "big-pickle");
+      assert.notEqual(request.headers.authorization, "Bearer fixture-only");
+      titles++;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({
+        id: "title", object: "chat.completion", created: 1, model: "big-pickle",
+        choices: [{ index: 0, message: { role: "assistant", content: "Fixture title" }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+      }));
+      return;
+    }
     assert.equal(request.url, "/api/llm/o/v1/chat/completions");
     assert.equal(request.headers.authorization, "Bearer fixture-only");
-    assert.equal(request.headers["x-api-provider"], "fireworks");
     assert.equal(request.headers["x-client-version"], CLIENT_VERSION);
     assert.equal(request.headers["x-factory-client"], "cli");
     let raw = "";
     for await (const chunk of request) raw += chunk;
     const body = JSON.parse(raw);
     assert.equal(body.model, "glm-5.3-flash");
+    assert.equal(request.headers["x-api-provider"], "fireworks");
+    requestedModels.add(body.model);
     assert.equal(body.messages[0].role, "system");
     assert.ok(body.messages[0].content.startsWith(DROID_IDENTITY));
     calls++;
@@ -62,7 +79,14 @@ try {
   const base = `http://127.0.0.1:${address.port}`;
   await mkdir(join(directory, ".opencode/plugins"), { recursive: true });
   await writeFile(join(directory, ".opencode/plugins/factory.ts"),
-    `export { default } from ${JSON.stringify(fileURLToPath(new URL("../src/index.ts", import.meta.url)))};\n`);
+    `import plugin from ${JSON.stringify(fileURLToPath(new URL("../src/index.ts", import.meta.url)))};
+export default { ...plugin, async setup(ctx) {
+await ctx.model.transform(editor => editor.update("opencode", "big-pickle", model => {
+model.package = "aisdk:@ai-sdk/openai-compatible";
+model.settings = { baseURL: "${base}/free/v1", apiKey: "free-fixture" };
+}));
+return plugin.setup(ctx);
+} };\n`);
   await writeFile(join(directory, "opencode.json"), JSON.stringify({ plugins: [] }));
   const home = join(directory, "home");
   await mkdir(home);
@@ -92,6 +116,8 @@ try {
     assert.equal(code, 0, output);
     assert.ok(calls > 0, output);
     assert.match(output, /pong/);
+    assert.deepEqual([...requestedModels], ["glm-5.3-flash"]);
+    assert.ok(titles > 0, "titles must use the OpenCode free model, not Factory");
     console.log(`OpenCode smoke passed (${calls} fixture requests; no subscription usage).`);
   } finally {
     clearTimeout(timer);

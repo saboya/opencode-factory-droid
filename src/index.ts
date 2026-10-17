@@ -10,6 +10,7 @@ import {
   type ModelPolicyStore,
 } from "./policy";
 import { registerFactoryHooks } from "./hooks";
+import { registerFreeTitles } from "./titles";
 
 const ENV_KEY = "FACTORY_API_KEY";
 const ENV_BASE = "FACTORY_API_BASE_URL";
@@ -77,6 +78,7 @@ export default Plugin.define({
     const key = requireKey();
     const base = baseURL();
     const registrations: Array<{ dispose: () => Promise<void> }> = [];
+    registrations.push(await registerFreeTitles(ctx));
 
     // Fetch the org's model policy and drop models the account cannot call
     // (they 403 at request time). Fetched once per setup; cached in storage so a
