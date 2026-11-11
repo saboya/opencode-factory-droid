@@ -234,6 +234,7 @@ and headless clients do not show the TUI section; notices are still recorded.
 npm run typecheck
 npm test
 npm run test:opencode
+npm run test:tui
 npm run gen-models
 ```
 
@@ -243,6 +244,13 @@ reasoning/tool-result round trip against a loopback fixture, including stateless
 replay, policy loading, Factory headers, and Droid identity.
 It uses fake credentials and no subscription quota. Unit tests cover all three
 provider registrations, policy filtering, repeatable transforms, and cleanup.
+
+`test:tui` requires Bun and tests the actual `npm pack` artifact without the
+checkout's TypeScript configuration. It loads the TUI export and uses OpenTUI's
+test renderer to verify the activity section, expand/collapse mouse interaction,
+live updates, and toasts without model calls. The TUI entry uses public renderer
+primitives in plain TypeScript, so package installs do not require JSX/React
+compilation or a bundled `tsconfig.json`.
 
 `gen-models` fetches models.dev and regenerates the committed
 `src/models.gen.ts` cost and limit tables. To use a downloaded dataset:

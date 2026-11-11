@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./tui": "./src/tui.tsx",
+    "./tui": "./src/tui.ts",
     "./rpc": "./src/activity-rpc.ts"
   },
   "files": [
@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "test:opencode": "tsx scripts/smoke-opencode.ts",
+    "test:tui": "bun --conditions=browser scripts/smoke-tui.ts",
     "probe": "node scripts/probe.ts",
     "gen-models": "node scripts/gen-models.mjs"
   },

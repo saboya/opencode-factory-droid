@@ -1,5 +1,7 @@
 import { Plugin } from "@opencode/plugin/tui";
-import { For, Show, createEffect, createSignal } from "solid-js";
+import { createElement, spread } from "@opentui/solid";
+import type { JSX } from "solid-js";
+import { createEffect, createSignal } from "solid-js";
 import { FactoryActivity, type ActivityEntry } from "./activity-rpc";
 
 export default Plugin.define({
@@ -37,22 +39,44 @@ export default Plugin.define({
         // A slot is mounted per session composer; load durable history on mount.
         createEffect(() => { void load(props.sessionID); });
         const entries = () => logs()[props.sessionID] ?? [];
-        return <Show when={entries().length > 0}>
-          <box flexDirection="column" paddingLeft={1} paddingRight={1}>
-            <text fg={ctx.theme.text.base} onMouseDown={() => setExpanded(!expanded())}>
-              {`${expanded() ? "▾" : "▸"} Factory activity (${entries().length}) — click to ${expanded() ? "collapse" : "expand"}`}
-            </text>
-            <Show when={expanded()}>
-              <scrollbox height={Math.min(8, entries().length)}>
-                <For each={entries()}>{(entry) => <text fg={ctx.theme.text.base}>
-                  {new Date(entry.time).toLocaleTimeString()} · {entry.message}
-                </text>}</For>
-              </scrollbox>
-            </Show>
-          </box>
-        </Show>;
+        // Use the public renderer primitives rather than uncompiled JSX. Git/npm
+        // installs don't include tsconfig.json, and the CLI's default TSX loader
+        // otherwise emits React calls. Getters preserve Solid reactivity.
+        return element("box", {
+          flexDirection: "column",
+          get children() {
+            if (!entries().length) return [];
+            return element("box", {
+              flexDirection: "column", paddingLeft: 1, paddingRight: 1,
+              get children() {
+                return [
+                  element("text", {
+                    fg: ctx.theme.text.base,
+                    onMouseDown: () => setExpanded(!expanded()),
+                    get children() { return `${expanded() ? "▾" : "▸"} Factory activity (${entries().length}) — click to ${expanded() ? "collapse" : "expand"}`; },
+                  }),
+                  ...(expanded() ? [element("scrollbox", {
+                        get height() { return Math.min(8, entries().length); },
+                        get children() {
+                          return entries().map((entry) => element("text", {
+                              fg: ctx.theme.text.base,
+                              children: `${new Date(entry.time).toLocaleTimeString()} · ${entry.message}`,
+                            }));
+                        },
+                      })] : []),
+                ];
+              },
+            });
+          },
+        });
       },
     });
     return () => { disposed = true; stop(); remove(); };
   },
 });
+
+function element(type: "box" | "text" | "scrollbox", props: Record<string, unknown>): JSX.Element {
+  const node = createElement(type);
+  spread(node, props);
+  return node as unknown as JSX.Element;
+}
