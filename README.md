@@ -149,7 +149,71 @@ Explicit `agents.title.model` settings take precedence. If no free OpenCode mode
 is available at setup, automatic titles are skipped rather than spending Factory
 quota. Restart/reload the plugin to refresh selection. Only title-agent selection
 changes; conversation and compaction models are untouched. This title-agent
-default applies project-wide, including when both plugins are loaded.
+  default applies project-wide, including when both plugins are loaded.
+
+### Images and oversized requests
+
+Factory requests proactively optimize inline JPEG, PNG, and WebP images using
+`sharp` (no external executable). Images above 2 encoded bits/pixel, or a 2560px
+long edge, are candidates. Opaque images may use JPEG quality 88 with 4:4:4
+chroma; PNG is also tried for PNG inputs. Transparency is preserved, animations
+are not flattened, and a replacement is kept only when it saves at least 15%.
+Bits/pixel is a candidate-selection heuristic, not a quality guarantee.
+
+The complete serialized UTF-8 request has a default budget of **4,000,000 bytes**,
+including base64 overhead. When over budget, the plugin tries stronger image
+compression/resizing, omits oldest historical images/PDFs with explicit
+placeholders, and, if needed, creates request-local summaries of older user turns
+or oversized tool results. Current user attachments are protected from omission;
+emergency resizing may reduce their long edge to 640px. Summary requests are
+chunked, use the selected Factory model, and **consume subscription quota**.
+They do not execute tools. This is request-local compaction, not an OpenCode
+persisted compaction checkpoint.
+
+Original attachments and transcripts remain in saved sessions. Image encodes and
+summaries use bounded in-memory caches, cleared on plugin unload; nothing is
+uploaded to an image host or persisted by this feature. Tool IDs, call/result
+pairs, and retained GPT encrypted reasoning are preserved. An unexpected HTTP
+413 gets at most two progressively smaller recovery attempts, only if the body
+actually shrinks. Other errors retain OpenCode's normal retry behavior.
+
+Configure a smaller budget via the plugin entry's `options.requestByteBudget`
+(integer, 32,000–4,000,000). Do not load both this entry and another copy of the
+plugin:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [{
+    "package": "github:saboya/opencode-factory-droid",
+    "options": { "requestByteBudget": 4000000 }
+  }]
+}
+```
+
+Recovery is best effort: one enormous current user message, tool definitions,
+unsupported attachments, or unavailable summarization can still prevent a
+request from fitting. The plugin does not silently truncate user text or invent
+image descriptions. Originals remain available for a fresh session if needed.
+
+#### Factory activity notices
+
+When the package's TUI part is loaded, image optimization, byte-budget recovery,
+attachment omission, and summarization show a toast **and** a persistent,
+expandable **Factory activity** section above the composer. Click the heading to
+expand/collapse its scrollable log. Each session retains its latest 200 notices
+in local plugin storage; repeated identical notices are deduplicated, including
+after reload. Existing notices load without replaying old toasts.
+
+These are UI diagnostics, **not conversation messages**: they are never added to
+model requests or summarization input. They contain operation counts/sizes and
+timestamps, not image contents, prompts, or credentials. The log survives session
+reopening and service/plugin reloads. It describes request-local summarization,
+not a persisted OpenCode compaction checkpoint.
+
+The `./tui` export loads automatically for a configured plugin package/directory.
+A single-file server re-export shim alone does not load this UI part. Desktop
+and headless clients do not show the TUI section; notices are still recorded.
 
 - **Cost estimates:** prices are upstream vendor list prices, not Factory charges
   or subscription-quota usage.

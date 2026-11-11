@@ -1,5 +1,7 @@
 import { Plugin } from "@opencode/plugin";
 import { CLIENT_VERSION, DROID_IDENTITY } from "./catalog";
+import { PayloadManager } from "./payload";
+import type { ActivityNotice } from "./activity";
 
 /** The setup context `Plugin.define` hands to `setup`, without importing an internal path. */
 type SetupContext = Parameters<Parameters<typeof Plugin.define>[0]["setup"]>[0];
@@ -62,6 +64,8 @@ function injectIdentity(pathname: string, body: Record<string, unknown>): boolea
 }
 
 export interface FactoryHookOptions {
+  recordActivity?: (sessionID: string, notice: ActivityNotice) => Promise<void>;
+  requestByteBudget?: number;
   /** Factory API key; enforced as `authorization: Bearer …` on every request. */
   key: string;
   /** Resolve the upstream backend (`x-api-provider` header) for a wire model ID. */
@@ -102,6 +106,8 @@ export async function registerFactoryHooks(
   options: FactoryHookOptions,
 ): Promise<Array<{ dispose: () => Promise<void> }>> {
   const registrations: Array<{ dispose: () => Promise<void> }> = [];
+  const payload = new PayloadManager({ maxBytes: options.requestByteBudget });
+  registrations.push({ dispose: async () => payload.clear() });
 
   for (const providerID of providerIDs) {
     for (const kind of IDENTITY_KINDS) {
@@ -173,14 +179,23 @@ export async function registerFactoryHooks(
           return;
         }
         if (injectIdentity(url.pathname, body)) {
+          const headers = new Headers(request.headers);
+          headers.delete("content-length");
           event.request = new Request(request, {
+            headers,
             body: JSON.stringify(body),
           });
         }
+        event.request = await payload.prepare(event.request, payload.maxBytes,
+          (notice) => options.recordActivity?.(event.sessionID, notice) ?? Promise.resolve());
       },
       { providerID },
     );
     registrations.push(httpReg);
+    registrations.push(await ctx.session.hook("http.response", async (event) => {
+      if (event.response.status === 413) event.response = await payload.recover(event.request, event.response,
+        (notice) => options.recordActivity?.(event.sessionID, notice) ?? Promise.resolve());
+    }, { providerID }));
   }
 
   return registrations;

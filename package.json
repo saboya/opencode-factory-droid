@@ -4,7 +4,9 @@
   "description": "OpenCode V2 plugin exposing Factory (Droid) subscription models as providers",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tui": "./src/tui.tsx",
+    "./rpc": "./src/activity-rpc.ts"
   },
   "files": [
     "src"
@@ -17,10 +19,24 @@
     "gen-models": "node scripts/gen-models.mjs"
   },
   "dependencies": {
-    "@opencode/plugin": "2.0.32"
+    "@opencode/plugin": "2.0.32",
+    "sharp": "^0.34.5"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.6.6",
+    "@opentui/solid": ">=0.6.6",
+    "solid-js": ">=1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentui/core": { "optional": true },
+    "@opentui/solid": { "optional": true },
+    "solid-js": { "optional": true }
   },
   "devDependencies": {
+    "@opentui/core": "^0.8.4",
+    "@opentui/solid": "^0.8.4",
     "@types/node": "^24.0.0",
+    "solid-js": "^1.9.19",
     "tsx": "^4.23.15",
     "typescript": "^5.6.0"
   }

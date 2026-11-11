@@ -12,6 +12,8 @@ let calls = 0;
 const requestedModels = new Set<string>();
 let titles = 0;
 let responsesCalls = 0;
+let summaries = 0;
+let recoveryFailures = 0;
 const server = createServer(async (request, response) => {
   try {
     if (request.url === "/api/organization/managed-settings") {
@@ -46,6 +48,14 @@ const server = createServer(async (request, response) => {
       assert.equal(body.store, false);
       assert.ok(body.include.includes("reasoning.encrypted_content"));
       assert.ok(!body.input.some((item: any) => item.type === "item_reference"));
+      if (body.input[0]?.content?.[0]?.text?.startsWith("Conversation data to summarize:")) {
+        summaries++;
+        assert.ok(Buffer.byteLength(raw) < 32_000);
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ output: [{ type: "message", content: [{ type: "output_text", text: "Earlier fixture history summarized." }] }] }));
+        return;
+      }
+      assert.ok(Buffer.byteLength(raw) <= 32_000);
       const auxiliary = !body.tools?.length;
       if (!auxiliary) responsesCalls++;
       const followup = responsesCalls > 1;
@@ -97,6 +107,19 @@ const server = createServer(async (request, response) => {
     requestedModels.add(body.model);
     assert.equal(body.messages[0].role, "system");
     assert.ok(body.messages[0].content.startsWith(DROID_IDENTITY));
+    if (body.messages.at(-1)?.content?.startsWith?.("Conversation data to summarize:")) {
+      summaries++;
+      assert.ok(Buffer.byteLength(raw) < 32_000);
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ choices: [{ message: { content: "Earlier fixture history summarized." } }] }));
+      return;
+    }
+    if (JSON.stringify(body.messages).includes("Recover this fixture")) {
+      recoveryFailures++;
+      response.writeHead(413).end("FUNCTION_PAYLOAD_TOO_LARGE");
+      return;
+    }
+    assert.ok(Buffer.byteLength(raw) <= 32_000);
     calls++;
     const completion = {
       id: "fixture", object: "chat.completion", created: 1, model: body.model,
@@ -132,16 +155,27 @@ try {
   await writeFile(join(directory, ".opencode/plugins/factory.ts"),
     `import plugin from ${JSON.stringify(fileURLToPath(new URL("../src/index.ts", import.meta.url)))};
 export default { ...plugin, async setup(ctx) {
+await ctx.session.hook("http.request", async event => {
+  if (!event.request.url.includes("/api/llm/")) return;
+  const body = await event.request.clone().json();
+  if (!body.tools?.length) return;
+  const items = body.input ?? body.messages;
+  const offset = items[0]?.role === "system" ? 1 : 0;
+  items.splice(offset, 0, { role: "user", content: process.env.FACTORY_SMOKE_RECOVERY_MODE ?
+    "Recover this fixture " + "old history ".repeat(600) : "Old fixture history ".repeat(2500) },
+    { role: "assistant", content: "Earlier fixture decision." });
+  event.request = new Request(event.request, { body: JSON.stringify(body) });
+});
 await ctx.model.transform(editor => editor.update("opencode", "big-pickle", model => {
 model.package = "aisdk:@ai-sdk/openai-compatible";
 model.settings = { baseURL: "${base}/free/v1", apiKey: "free-fixture" };
 }));
-return plugin.setup(ctx);
+return plugin.setup({ ...ctx, options: { ...ctx.options, requestByteBudget: 32000 } });
 } };\n`);
   await writeFile(join(directory, "opencode.json"), JSON.stringify({ plugins: [] }));
   const home = join(directory, "home");
   await mkdir(home);
-  for (const model of ["factory-o/glm-5.3-flash", "factory-gpt/gpt-6.1-sol"]) {
+  for (const [model, recovery] of [["factory-o/glm-5.3-flash", false], ["factory-gpt/gpt-6.1-sol", false], ["factory-o/glm-5.3-flash", true]] as const) {
     const child = spawn(process.env.OPENCODE_BIN ?? "opencode", [
       "run", "--standalone", "--model", model, "Reply with pong.",
     ], {
@@ -152,6 +186,7 @@ return plugin.setup(ctx);
         HOME: home, XDG_CONFIG_HOME: join(home, ".config"),
         XDG_DATA_HOME: join(home, ".local/share"), XDG_CACHE_HOME: join(home, ".cache"),
         FACTORY_API_KEY: "fixture-only", FACTORY_API_BASE_URL: base, FACTORY_APP_BASE_URL: base,
+        FACTORY_SMOKE_RECOVERY_MODE: recovery ? "1" : "",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -176,7 +211,9 @@ return plugin.setup(ctx);
     }
   }
   assert.equal(responsesCalls, 2, "Responses reasoning and tool output must replay statelessly");
-  console.log(`OpenCode smoke passed (${calls} Chat requests, ${responsesCalls} Responses steps; no subscription usage).`);
+  assert.ok(summaries >= 3, "oversized history must summarize and continue without breaking tool replay");
+  assert.equal(recoveryFailures, 1, "a gateway 413 must recover within the same dispatch");
+  console.log(`OpenCode smoke passed (${calls} Chat requests, ${responsesCalls} Responses steps, ${summaries} recovery summaries; no subscription usage).`);
 } finally {
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -11,6 +11,7 @@ import {
 } from "./policy";
 import { registerFactoryHooks } from "./hooks";
 import { registerFreeTitles } from "./titles";
+import { registerActivity } from "./activity";
 
 const ENV_KEY = "FACTORY_API_KEY";
 const ENV_BASE = "FACTORY_API_BASE_URL";
@@ -87,6 +88,8 @@ export default Plugin.define({
     const key = requireKey();
     const base = baseURL();
     const registrations: Array<{ dispose: () => Promise<void> }> = [];
+    const activity = await registerActivity(ctx);
+    registrations.push(activity);
     registrations.push(await registerFreeTitles(ctx));
 
     // Fetch the org's model policy and drop models the account cannot call
@@ -132,7 +135,9 @@ export default Plugin.define({
       ...(await registerFactoryHooks(
         ctx,
         ROUTES.map((r) => r.providerID),
-        { key, providerForModel: (modelID) => FACTORY_MODEL_PROVIDER.get(modelID) ?? "" },
+        { key, providerForModel: (modelID) => FACTORY_MODEL_PROVIDER.get(modelID) ?? "",
+          recordActivity: activity.record,
+          requestByteBudget: ctx.options?.requestByteBudget as number | undefined },
       )),
     );
 

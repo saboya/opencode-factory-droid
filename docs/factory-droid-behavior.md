@@ -213,6 +213,7 @@ Errors are JSON: `{detail, status, title, requestId}`.
 | Status | Meaning | Fix |
 |---|---|---|
 | 401 | missing/invalid `authorization` | send bearer |
+| 413 `FUNCTION_PAYLOAD_TOO_LARGE` | gateway request-body byte ceiling, separate from model context tokens | optimize images, omit old attachments, summarize older history |
 | 402 | quota/billing (expected for 402 mapping in M2 `retry` hook) | — |
 | 403 | WAF gate — identity missing/not at offset 0 in gated field | §4 |
 | 403 `"…not available due to your organization's security settings"` | model outside org policy | §7 (plugin filters these out) |
@@ -220,6 +221,20 @@ Errors are JSON: `{detail, status, title, requestId}`.
 | 400 `Invalid x-api-provider` | wrong backend for model/region | §6 |
 | 400 `Provider not available in this region` | backend not offered in region | §6 |
 | 429 | rate limit (honor `Retry-After`, M2 `retry` hook) | — |
+
+Observed 2026-11-11: a Responses session failed with Vercel's plain-text
+`FUNCTION_PAYLOAD_TOO_LARGE`; its serialized context was approximately 4.73 MB,
+including 3.58 MB of inline JPEGs. Context size is not an exact wire capture.
+Vercel documents a 4.5 MB function-body limit. Factory's public changelog documents
+image compression (0.31.0), compact-and-retry recovery (0.221.0), and omission of
+older images/PDFs (0.239.0). Their exact thresholds/order are not verified.
+
+`src/images.ts` and `src/payload.ts` implement proactive optimization and a
+4,000,000-byte request-local budget/recovery policy. This is not claimed to be an
+exact reproduction of Droid's internal algorithm. See README for quality,
+retention, quota, caching, and irreducible-input caveats. Loopback CLI fixtures
+exercise oversized Chat/Responses history and a real HTTP 413 recovery;
+Anthropic body handling has targeted unit coverage, not live wire coverage.
 
 ## 11. Model catalog (current)
 

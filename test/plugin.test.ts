@@ -40,6 +40,7 @@ for (const restricted of [false, true]) {
     const ctx = {
       model: { list: async () => ({ data: [] }) },
       storage: { get: async () => undefined, set: async () => {} },
+      rpc: { register: async () => ({ ...registration(), events: { emit: async () => {} } }) },
       provider: { transform: async (callback: typeof transform) => {
         transform = callback;
         return registration();
@@ -79,10 +80,10 @@ for (const restricted of [false, true]) {
         assert.ok(model.name.startsWith(spec.name));
       }
     }
-    assert.equal(hooks.length, 19);
+    assert.equal(hooks.length, 22);
     assert.deepEqual([...new Set(hooks.filter((h) => h.providerID).map((h) => h.providerID))], ROUTES.map((r) => r.providerID));
     assert.equal(typeof cleanup, "function");
     if (typeof cleanup === "function") await cleanup();
-    assert.equal(disposed, 20);
+    assert.equal(disposed, 24);
   });
 }
