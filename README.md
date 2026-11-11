@@ -220,6 +220,14 @@ timestamps, not image contents, prompts, or credentials. The log survives sessio
 reopening and service/plugin reloads. It describes request-local summarization,
 not a persisted OpenCode compaction checkpoint.
 
+The prompt footer also displays **Factory last payload: X / 4.00 MB**: the
+serialized UTF-8 body size (including base64) of the last prepared main request,
+after image/history reduction. It updates on tool continuations and smaller 413
+retries, but not titles or auxiliary summary calls. Yellow indicates at least
+85% of the budget; red indicates the budget is reached/exceeded. This is not a
+prediction of unsent drafts or newly attached files. The last value is retained
+per session across reloads and produces no toast or activity-log entry.
+
 The `./tui` export loads automatically for a configured plugin package/directory.
 A single-file server re-export shim alone does not load this UI part. Desktop
 and headless clients do not show the TUI section; notices are still recorded.

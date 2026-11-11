@@ -299,7 +299,8 @@ export class PayloadManager {
   }
 
   /** Recover in the same HTTP dispatch, retaining cancellation and SDK parsing. */
-  async recover(request: Request, response: Response, report: (notice: ActivityNotice) => Promise<void> = async () => {}): Promise<Response> {
+  async recover(request: Request, response: Response, report: (notice: ActivityNotice) => Promise<void> = async () => {},
+    recordPayload?: (bytes: number, budget: number) => Promise<void>): Promise<Response> {
     let current = request;
     for (let attempt = 0; response.status === 413 && attempt < 2; attempt++) {
       const previous = await current.clone().text();
@@ -314,6 +315,7 @@ export class PayloadManager {
       if (Buffer.byteLength(updated) >= Buffer.byteLength(previous)) break;
       await response.body?.cancel();
       current = next;
+      try { await recordPayload?.(Buffer.byteLength(updated), this.maxBytes); } catch { /* UI diagnostics are best effort. */ }
       response = await fetch(current);
     }
     return response;

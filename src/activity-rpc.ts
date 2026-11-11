@@ -9,12 +9,18 @@ export interface ActivityEntry {
   message: string;
 }
 
+export interface PayloadStatus {
+  bytes: number;
+  budget: number;
+  time: number;
+}
+
 export const FactoryActivity = Rpc.define({
   id: "opencode-factory.activity",
   methods: {
     list: {
       input: { type: "object", properties: { sessionID: { type: "string" } }, required: ["sessionID"], additionalProperties: false },
-      output: { type: "object", properties: { entries: { type: "array", items: { type: "object" } } }, required: ["entries"] },
+      output: { type: "object", properties: { entries: { type: "array", items: { type: "object" } }, payload: { type: "object" } }, required: ["entries"] },
     },
   },
   events: {

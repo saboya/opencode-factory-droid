@@ -27,18 +27,23 @@ try {
   const plugin = (await import(join(packagePath, manifest.exports["./tui"]))).default as Plugin.Definition;
   assert.equal(plugin.id, "opencode-factory.tui");
   let slot: { render: (props: { sessionID: string }) => unknown } | undefined;
+  let footer: typeof slot;
   let updated: ((event: unknown) => void) | undefined;
   let message = "Optimized 2 images: 1.20 MB → 0.30 MB.";
   const toasts: unknown[] = [];
   const entries = [{ id: "first", time: Date.now(), sessionID: "fixture", kind: "images", message }];
   cleanup = await plugin.setup({
     client: { rpc: () => ({
-      list: async () => ({ entries: [...entries] }),
+      list: async () => ({ entries: [...entries], payload: { bytes: 2_800_000, budget: 4_000_000, time: Date.now() } }),
       events: { on: (_event: string, handler: (event: unknown) => void) => { updated = handler; return () => {}; } },
     }) },
     data: { session: { get: () => ({ location: { directory } }) } },
     theme: { text: { base: "#ffffff" } },
-    ui: { toast: { show: (toast: unknown) => toasts.push(toast) }, slot: (claim: typeof slot) => { slot = claim; return () => {}; } },
+    ui: { toast: { show: (toast: unknown) => toasts.push(toast) }, slot: (claim: NonNullable<typeof slot> & { append: string }) => {
+      if (claim.append === "prompt.footer.status") footer = claim;
+      else slot = claim;
+      return () => {};
+    } },
   } as unknown as Plugin.Context);
   assert.ok(slot);
   ui = await testRender(() => slot!.render({ sessionID: "fixture" }) as never, { width: 100, height: 20 });
@@ -59,7 +64,10 @@ try {
   assert.equal(toasts.length, 1, "new entries must toast and persist in the section");
   await toggle();
   await ui.waitForFrame((frame) => frame.includes("click to expand") && !frame.includes(message));
-  console.log("Packed TUI smoke passed (load, render, expand/collapse, live update, toast; no model calls).");
+  await ui.dispose();
+  ui = await testRender(() => footer!.render({ sessionID: "fixture" }) as never, { width: 100, height: 4 });
+  await ui.waitForFrame((frame) => frame.includes("Factory last payload: 2.80 / 4.00 MB"));
+  console.log("Packed TUI smoke passed (load, activity log, toast, payload footer; no model calls).");
 } finally {
   await ui?.dispose();
   if (typeof cleanup === "function") await cleanup();

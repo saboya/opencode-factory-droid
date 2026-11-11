@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin";
 import { CLIENT_VERSION, DROID_IDENTITY } from "./catalog";
 import { PayloadManager } from "./payload";
 import type { ActivityNotice } from "./activity";
+import type { PayloadStatus } from "./activity-rpc";
 
 /** The setup context `Plugin.define` hands to `setup`, without importing an internal path. */
 type SetupContext = Parameters<Parameters<typeof Plugin.define>[0]["setup"]>[0];
@@ -64,6 +65,7 @@ function injectIdentity(pathname: string, body: Record<string, unknown>): boolea
 }
 
 export interface FactoryHookOptions {
+  recordPayload?: (sessionID: string, status: PayloadStatus) => Promise<void>;
   imageRetentionMessages?: number;
   recordActivity?: (sessionID: string, notice: ActivityNotice) => Promise<void>;
   requestByteBudget?: number;
@@ -189,13 +191,19 @@ export async function registerFactoryHooks(
         }
         event.request = await payload.prepare(event.request, payload.maxBytes,
           (notice) => options.recordActivity?.(event.sessionID, notice) ?? Promise.resolve());
+        if (event.kind === "primary") await options.recordPayload?.(event.sessionID, {
+          bytes: Buffer.byteLength(await event.request.clone().text()), budget: payload.maxBytes, time: Date.now(),
+        });
       },
       { providerID },
     );
     registrations.push(httpReg);
     registrations.push(await ctx.session.hook("http.response", async (event) => {
       if (event.response.status === 413) event.response = await payload.recover(event.request, event.response,
-        (notice) => options.recordActivity?.(event.sessionID, notice) ?? Promise.resolve());
+        (notice) => options.recordActivity?.(event.sessionID, notice) ?? Promise.resolve(),
+        event.kind === "primary" ? async (bytes, budget) => {
+          await options.recordPayload?.(event.sessionID, { bytes, budget, time: Date.now() });
+        } : undefined);
     }, { providerID }));
   }
 

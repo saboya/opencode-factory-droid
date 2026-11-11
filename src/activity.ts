@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Plugin } from "@opencode/plugin";
-import { FactoryActivity, type ActivityEntry } from "./activity-rpc";
+import { FactoryActivity, type ActivityEntry, type PayloadStatus } from "./activity-rpc";
 
 type Context = Parameters<Parameters<typeof Plugin.define>[0]["setup"]>[0];
 export type ActivityNotice = Pick<ActivityEntry, "kind" | "message"> & { key: string };
 type StoredEntry = ActivityEntry & { key: string };
 const storageKey = (sessionID: string) => `factory/activity/${sessionID}`;
+const payloadKey = (sessionID: string) => `factory/payload/${sessionID}`;
 
 /** Storage and notifications are best effort and cannot fail a model request. */
 export async function registerActivity(ctx: Context) {
@@ -23,11 +24,20 @@ export async function registerActivity(ctx: Context) {
       const sessionID = (input as { sessionID: string }).sessionID;
       await queue;
       const entries = await read(sessionID);
-      return { entries: entries.map(({ key: _key, ...entry }) => entry) };
+      const payload = await ctx.storage.get(payloadKey(sessionID));
+      return { entries: entries.map(({ key: _key, ...entry }) => entry), ...(payload ? { payload } : {}) };
     },
   });
   return {
     dispose: async () => { await queue; await registration.dispose(); },
+    payload: (sessionID: string, status: PayloadStatus): Promise<void> => {
+      const operation = queue.then(async () => {
+        await ctx.storage.set(payloadKey(sessionID), { ...status });
+        await registration.events.emit("updated", { sessionID });
+      }).catch(() => {});
+      queue = operation;
+      return operation;
+    },
     record: (sessionID: string, notice: ActivityNotice): Promise<void> => {
       const operation = queue.then(async () => {
         const entries = await read(sessionID);
