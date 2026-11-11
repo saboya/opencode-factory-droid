@@ -84,7 +84,7 @@ export default Plugin.define({
             const ratio = status.bytes / status.budget;
             return element("text", {
               fg: ratio >= 1 ? "#ff6666" : ratio >= 0.85 ? "#ffcc66" : ctx.theme.text.base,
-              children: ` · Factory last payload: ${(status.bytes / 1_000_000).toFixed(2)} / ${(status.budget / 1_000_000).toFixed(2)} MB`,
+              children: ` · ${(status.bytes / 1_000_000).toFixed(1)}/${Number((status.budget / 1_000_000).toFixed(2))} MB`,
             });
           },
         });

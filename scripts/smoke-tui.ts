@@ -66,7 +66,7 @@ try {
   await ui.waitForFrame((frame) => frame.includes("click to expand") && !frame.includes(message));
   await ui.dispose();
   ui = await testRender(() => footer!.render({ sessionID: "fixture" }) as never, { width: 100, height: 4 });
-  await ui.waitForFrame((frame) => frame.includes("Factory last payload: 2.80 / 4.00 MB"));
+  await ui.waitForFrame((frame) => frame.includes("2.8/4 MB"));
   console.log("Packed TUI smoke passed (load, activity log, toast, payload footer; no model calls).");
 } finally {
   await ui?.dispose();
