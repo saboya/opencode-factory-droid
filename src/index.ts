@@ -137,6 +137,7 @@ export default Plugin.define({
         ROUTES.map((r) => r.providerID),
         { key, providerForModel: (modelID) => FACTORY_MODEL_PROVIDER.get(modelID) ?? "",
           recordActivity: activity.record,
+          imageRetentionMessages: ctx.options?.imageRetentionMessages as number | undefined,
           requestByteBudget: ctx.options?.requestByteBudget as number | undefined },
       )),
     );

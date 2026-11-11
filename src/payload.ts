@@ -11,6 +11,7 @@ const OMITTED = "[Older attachment omitted to fit the Factory request-byte budge
 
 interface Attachment {
   item: number;
+  isImage: boolean;
   image?: EncodedImage;
   set(image: EncodedImage): void;
   omit(): void;
@@ -56,7 +57,7 @@ function attachments(items: unknown[], protocol: Protocol): Attachment[] {
           };
         }
       } else if (block.type !== "input_file" || typeof block.file_data !== "string") continue;
-      found.push({ item, image, set: set ?? (() => {}), omit: () => {
+      found.push({ item, image, isImage: ["image", "image_url", "input_image"].includes(String(block.type)), set: set ?? (() => {}), omit: () => {
         blocks[i] = { type: protocol === "responses" ? "input_text" : "text", text: OMITTED };
       } });
     }
@@ -76,7 +77,7 @@ function replaceBody(request: Request, body: ObjectValue): Request {
   return new Request(request, { headers, body: JSON.stringify(body) });
 }
 
-export interface PayloadOptions { maxBytes?: number }
+export interface PayloadOptions { maxBytes?: number; imageRetentionMessages?: number }
 
 /** Factory-only request shaping, with no edits to persisted Session history. */
 export class PayloadManager {
@@ -84,9 +85,14 @@ export class PayloadManager {
   private summaries = new Map<string, string>();
   private summaryBytes = 0;
   readonly maxBytes: number;
+  readonly imageRetentionMessages: number;
 
   constructor(options: PayloadOptions = {}) {
     this.maxBytes = options.maxBytes ?? 4_000_000;
+    this.imageRetentionMessages = options.imageRetentionMessages ?? 10;
+    if (!Number.isSafeInteger(this.imageRetentionMessages) || this.imageRetentionMessages < 1) {
+      throw new Error("opencode-factory: imageRetentionMessages must be a positive integer");
+    }
     if (!Number.isSafeInteger(this.maxBytes) || this.maxBytes < 32_000 || this.maxBytes > 4_000_000) {
       throw new Error("opencode-factory: requestByteBudget must be an integer between 32000 and 4000000");
     }
@@ -111,7 +117,26 @@ export class PayloadManager {
     const notice = async (kind: ActivityNotice["kind"], message: string, key = fingerprint) => {
       try { await report({ kind, message, key: `${kind}:${key}` }); } catch { /* UI diagnostics must not fail dispatch. */ }
     };
-    const files = attachments(items, protocol);
+    const allFiles = attachments(items, protocol);
+    // Count conversational messages, not Responses reasoning/function items or
+    // tool-result envelopes. Associate tool visuals with the preceding message.
+    let messageCount = 0, latestUser = -1;
+    const positions = items.map((item, i) => {
+      if (object(item) && ["user", "assistant"].includes(String(item.role)) &&
+          !(Array.isArray(item.content) && item.content.some((part) => object(part) && part.type === "tool_result"))) {
+        messageCount++;
+        if (item.role === "user") latestUser = i;
+      }
+      return messageCount;
+    });
+    const expired = allFiles.filter((file) => file.isImage && file.item !== latestUser &&
+      positions[file.item] <= messageCount - this.imageRetentionMessages);
+    for (const file of expired) file.omit();
+    if (expired.length) await notice("attachments", `Omitted ${expired.length} image(s) older than the last ${this.imageRetentionMessages} conversational messages. Saved originals are unchanged.`,
+      createHash("sha256").update(JSON.stringify(expired.map((file) => file.image ?? { item: file.item }))).digest("hex"));
+    const expiredSet = new Set(expired);
+    const files = allFiles.filter((file) => !expiredSet.has(file));
+    const imageKey = createHash("sha256").update(JSON.stringify(files.map((file) => file.image))).update(String(budget)).digest("hex");
     let optimized = 0, originalBytes = 0, optimizedBytes = 0;
     for (const file of files) if (file.image) {
       const next = await this.images.optimize(file.image);
@@ -131,13 +156,8 @@ export class PayloadManager {
         if (file.image) file.set(await this.images.optimize(file.image, true));
         if (jsonBytes(body) <= budget) break;
       }
-      if (jsonBytes(body) < start) await notice("images", `Emergency image recompression/resizing reduced the request: ${formatBytes(start)} → ${formatBytes(jsonBytes(body))}.`, `${fingerprint}:emergency`);
+      if (jsonBytes(body) < start) await notice("images", `Emergency image recompression/resizing reduced the request: ${formatBytes(start)} → ${formatBytes(jsonBytes(body))}.`, `${imageKey}:emergency`);
     }
-    let latestUser = -1;
-    items.forEach((item, i) => {
-      if (object(item) && item.role === "user" && !(Array.isArray(item.content) &&
-          item.content.some((part) => object(part) && part.type === "tool_result"))) latestUser = i;
-    });
     if (jsonBytes(body) > budget) {
       // Protect attachments in the newest user turn and its tool continuations.
       let omitted = 0;
@@ -159,7 +179,7 @@ export class PayloadManager {
         }
         if (jsonBytes(body) <= budget) break;
       }
-      if (jsonBytes(body) < start) await notice("images", `Resized current images further to fit the byte budget: ${formatBytes(start)} → ${formatBytes(jsonBytes(body))}.`, `${fingerprint}:resize`);
+      if (jsonBytes(body) < start) await notice("images", `Resized current images further to fit the byte budget: ${formatBytes(start)} → ${formatBytes(jsonBytes(body))}.`, `${imageKey}:resize`);
     }
     if (jsonBytes(body) > budget && latestUser > 0) {
       // Split only at user-turn boundaries: no tool calls/results or encrypted

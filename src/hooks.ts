@@ -64,6 +64,7 @@ function injectIdentity(pathname: string, body: Record<string, unknown>): boolea
 }
 
 export interface FactoryHookOptions {
+  imageRetentionMessages?: number;
   recordActivity?: (sessionID: string, notice: ActivityNotice) => Promise<void>;
   requestByteBudget?: number;
   /** Factory API key; enforced as `authorization: Bearer …` on every request. */
@@ -106,7 +107,7 @@ export async function registerFactoryHooks(
   options: FactoryHookOptions,
 ): Promise<Array<{ dispose: () => Promise<void> }>> {
   const registrations: Array<{ dispose: () => Promise<void> }> = [];
-  const payload = new PayloadManager({ maxBytes: options.requestByteBudget });
+  const payload = new PayloadManager({ maxBytes: options.requestByteBudget, imageRetentionMessages: options.imageRetentionMessages });
   registrations.push({ dispose: async () => payload.clear() });
 
   for (const providerID of providerIDs) {

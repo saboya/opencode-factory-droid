@@ -160,6 +160,15 @@ chroma; PNG is also tried for PNG inputs. Transparency is preserved, animations
 are not flattened, and a replacement is kept only when it saves at least 15%.
 Bits/pixel is a candidate-selection heuristic, not a quality guarantee.
 
+Before optimization, inline images older than the last **10 conversational
+messages** are replaced with omission placeholders, even below the byte budget.
+User/assistant messages count toward age; tool-result envelopes, Responses
+function calls/outputs, and reasoning items do not. The latest user message's
+images are always protected from age-based omission. Originals remain in saved
+history. Set `options.imageRetentionMessages` to a positive integer to change
+the retention window. Expired images are not recompressed, and omission/resize
+notices use stable deduplication keys across continuations.
+
 The complete serialized UTF-8 request has a default budget of **4,000,000 bytes**,
 including base64 overhead. When over budget, the plugin tries stronger image
 compression/resizing, omits oldest historical images/PDFs with explicit

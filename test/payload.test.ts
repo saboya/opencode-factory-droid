@@ -186,3 +186,40 @@ test("summary failures and cancellation do not mutate originals or trigger retry
   assert.equal(calls, 1);
   assert.deepEqual(await req.json(), body);
 });
+
+for (const protocol of ["anthropic", "chat", "responses"] as const) {
+  test(`${protocol}: old inline images expire below budget before optimization, with stable notices`, async () => {
+    const manager = new PayloadManager({ imageRetentionMessages: 2 });
+    const image = protocol === "anthropic" ? { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "broken" } } :
+      protocol === "chat" ? { type: "image_url", image_url: { url: "data:image/jpeg;base64,broken" } } :
+      { type: "input_image", image_url: "data:image/jpeg;base64,broken" };
+    const items = [{ role: "user", content: [image] }, { role: "assistant", content: "analysis" },
+      { role: "user", content: "next" }];
+    const notices: Array<{ key: string; kind: string }> = [];
+    const path = protocol === "anthropic" ? "/v1/messages" : protocol === "chat" ? "/v1/chat/completions" : "/v1/responses";
+    const run = async () => {
+      const body = { model: "test", [protocol === "responses" ? "input" : "messages"]: items };
+      return (await manager.prepare(request(path, body), manager.maxBytes, async (notice) => { notices.push(notice); })).json();
+    };
+    const result = await run();
+    assert.match((result.input ?? result.messages)[0].content[0].text, /Older attachment omitted/);
+    assert.deepEqual(items[0].content, [image], "saved originals remain untouched");
+    assert.deepEqual(notices.map((notice) => notice.kind), ["attachments"]);
+    items.push({ role: "assistant", content: "more analysis" });
+    await run();
+    assert.equal(notices[0].key, notices[1].key, "continuations must not re-toast the same omission");
+  });
+}
+
+test("retention boundary and latest user attachments are protected, and invalid windows fail clearly", async () => {
+  assert.throws(() => new PayloadManager({ imageRetentionMessages: 0 }), /positive integer/);
+  assert.throws(() => new PayloadManager({ imageRetentionMessages: 1.5 }), /positive integer/);
+  const image = { type: "input_image", image_url: "data:image/jpeg;base64,broken" };
+  const manager = new PayloadManager({ imageRetentionMessages: 2 });
+  const items = [{ role: "user", content: "earlier" }, { role: "assistant", content: [image] },
+    { role: "user", content: [image] }, { type: "reasoning", encrypted_content: "opaque" },
+    { type: "function_call", call_id: "one", name: "glob", arguments: "{}" },
+    { type: "function_call_output", call_id: "one", output: "done" }];
+  const req = request("/v1/responses", { model: "test", input: items });
+  assert.equal(await manager.prepare(req), req, "reasoning and function items must not age images");
+});
